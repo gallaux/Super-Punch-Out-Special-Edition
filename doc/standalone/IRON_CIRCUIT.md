@@ -74,7 +74,6 @@ Bank `$00` unless otherwise noted. Each hook is gated on the iron flag — vanil
 | `$00:B231` (B231_INIT) | Clears `$7E:1D72`+`$1D73` after every fight for all circuits |
 | `$00:B226` / `$00:B24A` | Stamina-stash hooks — capture `$089F` to `$7E:1FEB` before bonus screen drains it, on both KO and TKO post-match paths |
 | `$00:96A5` | Stamina-init override — reads HP stash, applies +16 recovery (cap `$50`), writes to `$089F` at fight start |
-| `$00:E9D3` | HP-bar fresh-fight fix — hooks `CODE_00E9AC` (fresh-fight init path) to write `$0B14 = $50` so the HP bar renders full on all fresh fights |
 | `$00:E9F7` | HP-bar tween fix — pre-fills tile positions 1–9 with empty-bar tile `$38`; sets `$0B14` to carry value so the bar snaps without animating on iron carry-over fights |
 | `$00:9C18` | BG2 palette override — MVNs the iron rust palette when iron flag `$7E:1D71` is set OR belt-screen flag `$7E:1D72` is set; original Special purple on vanilla |
 | `$00:BF81` | Belt-screen palette override — MVNs rust BG2 + steel-blue belt + sprite palette into the championship screen on iron |
@@ -138,7 +137,6 @@ Bank `$00` unless otherwise noted. Each hook is gated on the iron flag — vanil
 | `$01:FF02` | bank `$01` | FAST_CASCADE |
 | `$01:FF20` | bank `$01` | Iron W/L draw trampolines (2 × 8 B) |
 | `$01:FF30` | bank `$01` | SLOT_KILL |
-| `$01:FF3F` | bank `$01` | E9AC_FIX — writes `$0B14 = $50` for fresh-fight HP bar (PLB + LDA #$50 + STA $0B14 + PLA PLA + JML $E9FB) |
 | `$01:FF4B` | bank `$01` | STARTUP_TRAMPOLINE — replicates eaten `LDA #$0C; XBA` from `$01:B0F3` hook, returns immediately (RTS). No flag writes — safe to call mid-gameplay. |
 | `$0D:FA69` | bank `$0D` | IRON tally descriptor |
 

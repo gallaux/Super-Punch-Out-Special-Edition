@@ -1287,7 +1287,8 @@ The disassembly labels `$00:F5D0–$00:FF8F` as `UNK_00F5D0` — a 2,496-byte `%
 | `0xFF12–0xFF1F` | 14 B | **Free** (gap between FAST_CASCADE and the iron W/L draw trampolines) |
 | `0xFF20–0xFF2F` | 16 B | **`spo_iron_circuit.ips`** — iron W/L draw trampoline pair |
 | `0xFF30–0xFF3E` | 15 B | **`spo_iron_circuit.ips`** — SLOT_KILL stub (clear iron W/L on per-profile FILE KILL) |
-| `0xFF3F–0xFF54` | 22 B | **`spo_iron_circuit.ips`** — E9AC HP-bar fix stub (12 B) + startup init stub (10 B) |
+| `0xFF3F–0xFF4A` | 12 B | **Free** |
+| `0xFF4B–0xFF54` | 10 B | **`spo_iron_circuit.ips`** — startup init stub |
 | `0xFF55–0xFF8F` | ~59 B | **Free** (end of `UNK_01D722`) |
 | `0xFFB0–0xFFE0` | 49 B | 5-item Mode Select dispatch stub + TA/RV trampolines + VERSUS handler + trampoline 2 (extends 1 byte into the previously-free `$01:FFE0` slot) |
 | `0xFFE1–0xFFE3` | 3 B | **Free** |
@@ -1345,12 +1346,12 @@ The disassembly at line 78995 explicitly labels `$0DFA69–$0DFFE3` as garbage f
 |---|---|
 | Bank `$0D` (`$0DFA69–$0DFFE3` zone) | **~213 B** (fragmented; max contiguous run 68 B at `$0D:FD25–$0D:FD68`) |
 | Bank `$01` `UNK_01F784` (end at `$01:F800`) | **1 B** |
-| Bank `$01` `UNK_01D722` (`$01:FF12–$FF1F` and `$01:FF55–$FF8F`) | **~73 B** |
+| Bank `$01` `UNK_01D722` (`$01:FF12–$FF1F`, `$01:FF3F–$FF4A`, and `$01:FF55–$FF8F`) | **~85 B** |
 | Bank `$01` `$01:801C–$01:8029` (header thunk zone tail) | **14 B** |
 | Bank `$01` `$01:846A` (back-out clear zone tail) | **1 B** |
 | Bank `$01` `$01:FFE1–$FFE3` | **3 B** |
 | Bank `$00` `UNK_00F5D0` (`$00:FE18–$00:FF8F`) | **~376 B** (contiguous) |
-| **Total** | **~681 B** |
+| **Total** | **~693 B** |
 
 `spo_super_macho_man_fix.ips` also consumes 19 bytes in bank `$08` at file `0x045926` (`$08:D926`) for the new fighter-banner entry. That region sits inside the disassembly's documented `%InsertGarbageData($08D926, ...)` zone — dead code from development, never referenced at runtime. `spo_iron_circuit.ips` adds **no stub bytes** to bank `$08` (only single-instruction in-place hooks); iron-staged data lives in low WRAM and is read via the bank-`$08` low-WRAM mirror.
 
