@@ -344,9 +344,19 @@ The `; (full body in TECHNICAL.md record [N])` placeholders cover the three larg
 ## Compatibility
 
 - **Apply on top of**: original `Super Punch-Out!! (USA).sfc` ROM (MD5 `97fe7d7d2a1017f8480e60a365a373f0`)
-- **Bundled into**: `spo_special_edition_v1.8.ips`
+- **Bundled into**: `spo_special_edition_v2.0.ips`
 - **Byte-disjoint** with every other standalone patch in this repository — no overlaps, no required apply order.
 - **Cheat-code compatibility**: unaffected
+
+## Building
+
+Built by [`scripts/build_spo_versus_hack.py`](../../scripts/build_spo_versus_hack.py):
+
+```
+python scripts/build_spo_versus_hack.py <vanilla.sfc> [out.sfc]
+```
+
+The builder applies its record set to a vanilla ROM, stamps the SNES header checksum, and writes `patches/standalone/spo_versus_hack.ips`. Pass an optional output path to also emit the patched `.sfc`.
 
 ## See also
 

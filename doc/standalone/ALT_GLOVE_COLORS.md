@@ -18,7 +18,7 @@ Adds a runtime glove-color selector to the player's gloves. By default each circ
 - **R** → red
 - **X** → yellow
 - **Y** → force vanilla green (override even on a colored-default opponent)
-- **SELECT** → white
+- **L+R** → white
 
 **Iron Circuit auto-default:** during iron-circuit gauntlet runs (when WRAM byte `$7E:1D71` is non-zero, owned by `spo_iron_circuit.ips`), gloves default to white if no manual button is held. Any manual override still wins. This is a cooperative behavior between the two patches via a shared WRAM byte — neither patch hard-depends on the other.
 
@@ -79,15 +79,19 @@ Five sites in bank `$00` redirect into stubs in bank `$0D` free space, plus one 
 | `$00:EC69` (rts variant) | `JSR EC6E + RTS` | `JSL $00:F5D5` | Same fixup as sep variant, but exits via intra-bank RTS for the bank-`$00` caller |
 | `$00:EC64` | `BEQ +5 → $EC6B` | `NOP NOP` | Disables a BEQ that would land inside our 5-byte EC68 hook |
 
-### SELECT + iron-flag helper (`$0D:FE52`)
+### L+R + iron-flag helper (`$0D:FE52`)
 
-A small (22 B) helper stub at `$0D:FE52` is called from the trampoline's no-button-held fallback path. It checks two override conditions before falling back to the opp_table default:
+A small (24 B) helper stub at `$0D:FE52` is called from the trampoline's no-button-held fallback path. It checks two override conditions before falling back to the opp_table default:
 
-1. **SELECT held** (`$7E:0091` bit 5 set) → return mode 4 (white)
+1. **L+R held** (`$7E:0090` bits 4+5 both set) → return mode 4 (white)
 2. **Iron-circuit flag set** (`$7E:1D71` non-zero, owned by `spo_iron_circuit.ips`) → return mode 4
 3. **Else** → return `opp_table[opp_index]` (the circuit default)
 
-The helper is only consulted when no manual L/R/X/Y button is held. Manual button presses are decoded earlier in the trampoline and bypass the helper entirely — so manual override always beats SELECT, which beats iron auto-default, which beats opp_table default.
+The helper is only consulted when no individual L/R/X/Y button combination is resolved first by the trampoline's direct checks. The trampoline checks L+R (both held simultaneously) first at [14], then L alone at [22], then dispatches to the R-vs-X sub (`$0D:FE6A`) at [30] for R/X disambiguation. The helper only handles the auto-default case.
+
+### R-vs-X sub (`$0D:FE6A`)
+
+An 18 B sub at `$0D:FE6A` is reached via a `JMP` from trampoline offset [30] when neither L+R nor L alone was detected. It reads `$7E:0090` and tests bit 4 (R): if set → mode 2 (red), else → mode 3 (yellow, X implicit). It JMPs directly to the trampoline commit address (`$0D:FE12`) rather than returning, so no stack manipulation is needed.
 
 ### Cross-bank-RTS trap
 
@@ -103,7 +107,7 @@ Hook 1's three MVNs each set DBR to the destination bank (`$7E`). The trampoline
 
 ## Patch records
 
-27 records, 777 bytes total (plus the SNES header checksum):
+28 records, 795 bytes total (plus the SNES header checksum):
 
 | File offset | Bytes | Effect |
 |---|---|---|
@@ -123,7 +127,8 @@ Hook 1's three MVNs each set DBR to the destination bank (`$7E`). The trampoline
 | `0x07DA0` | 48 | Portrait color table (3 frames × 4 modes × 4 B, `$00:FDA0`; indexed by frame*16 + (mode-1)*4) |
 | `0x06FDAA` | 68 | Vanilla-restore of old bank-`$0D` table region (40 B) + Hook 1 trampoline first 28 B |
 | `0x06FDEF` | 99 | Hook 1 fight-init trampoline last 99 B (button decode → opp-table/SELECT/iron via helper → triple MVN palette write) |
-| `0x06FE52` | 22 | SELECT + iron-flag helper stub |
+| `0x06FE52` | 24 | L+R + iron-flag helper stub |
+| `0x06FE6A` | 18 | R-vs-X sub (R→mode 2, X implicit→mode 3; JMPs to commit at `$0D:FE12`) |
 | `0x06FE80` | 60 | Powered-up stub |
 | `0x06FEC0` | 64 | Knock-out-punch stub |
 | `0x06FF00` | 32 | Vanilla-restore of old powered-up table location |
@@ -134,7 +139,7 @@ Hook 1's three MVNs each set DBR to the destination bank (`$7E`). The trampoline
 ## Free space consumed
 
 - **Bank `$00`** (`UNK_00F5D0` zone): 74 bytes at `$00:F5D0-$00:F619` (EC6E trampoline + portrait stub-rts) plus 176 bytes at `$00:FD20-$00:FDCF` for the relocated color tables. Total **250 B** in `UNK_00F5D0`.
-- **Bank `$0D`** (`UNK_0DFA69` zone): 441 bytes used across the Hook 1 trampoline (128 B), SELECT/iron helper (22 B), powered-up stub (60 B), knock-out-punch stub (64 B), portrait sep stub (67 B), and small gaps. Total **441 B**.
+- **Bank `$0D`** (`UNK_0DFA69` zone): 459 bytes used across the Hook 1 trampoline (128 B), L+R/iron helper (24 B), R-vs-X sub (18 B), powered-up stub (60 B), knock-out-punch stub (64 B), portrait sep stub (67 B), and small gaps. Total **459 B**.
 - **In-place edits** (no free space consumed): 6 hook sites in bank `$00` (28 B total) and the ending-credits palette edit at `$00:85DF` (6 B).
 
 Total ROM footprint: **~785 B** (including SNES header checksum, excluding vanilla-restore records which return relocated regions to their original vanilla state).
@@ -142,10 +147,20 @@ Total ROM footprint: **~785 B** (including SNES header checksum, excluding vanil
 ## Compatibility
 
 - **Apply on top of**: original `Super Punch-Out!! (USA).sfc` ROM (MD5 `97fe7d7d2a1017f8480e60a365a373f0`)
-- **Bundled into**: `spo_special_edition_v1.8.ips`
+- **Bundled into**: `spo_special_edition_v2.0.ips`
 - **Conflicts with**: nothing in this repo
 - **Cheat-code compatibility**: unaffected (no opponent palettes or fight-state machinery touched)
 - **Cooperates with `spo_iron_circuit.ips`** via the shared WRAM byte `$7E:1D71` (iron flag). Either patch can be applied without the other; together they enable iron-circuit auto-default to mode 4 (white).
+
+## Building
+
+Built by [`scripts/build_spo_alt_glove_colors.py`](../../scripts/build_spo_alt_glove_colors.py):
+
+```
+python scripts/build_spo_alt_glove_colors.py <vanilla.sfc> [out.sfc]
+```
+
+The builder applies its record set to a vanilla ROM, stamps the SNES header checksum, and writes `patches/standalone/spo_alt_glove_colors.ips`. Pass an optional output path to also emit the patched `.sfc`.
 
 ## See also
 

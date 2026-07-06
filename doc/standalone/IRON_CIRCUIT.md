@@ -3,10 +3,12 @@
 Adds a fifth entry, **IRON CIRCUIT**, to the Championship Mode → Circuit Select screen, below SPECIAL CIRCUIT. IRON CIRCUIT is a 16-opponent gauntlet that runs every fighter in order, from Gabby Jay to Nick Bruiser, without HP recovery between fights. Player stamina and cumulative knockdown count carry across every match.
 
 <img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_001" src="https://github.com/user-attachments/assets/a005e3ff-08a1-4835-b0f0-2491063453b7" />
-<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_002" src="https://github.com/user-attachments/assets/e0ea490b-b416-480f-b68a-e84b5171c406" />
-<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_003" src="https://github.com/user-attachments/assets/7c76f6fa-4ab5-441a-8996-d27526d97959" />
-<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_004" src="https://github.com/user-attachments/assets/99b270df-257b-402d-b6b7-6b95b4aa1dd4" />
-<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_005" src="https://github.com/user-attachments/assets/a10bcd41-bb2d-4a66-aba9-129f950a5871" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_002" src="https://github.com/user-attachments/assets/5d5acc5e-0285-45bb-aac4-656ae860629d" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_003" src="https://github.com/user-attachments/assets/277f6ed7-30c7-4e56-950b-262393e014ca" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_004" src="https://github.com/user-attachments/assets/22fb533b-54a8-436b-afcc-606053ea4c5b" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_005" src="https://github.com/user-attachments/assets/0f906b25-1afa-4b11-91b8-cbbbe2bc3686" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_006" src="https://github.com/user-attachments/assets/a0e1bdab-7e0c-4ad7-827f-b6f1acd9b0c8" />
+<img width="256" height="224" alt="Super Punch-Out!! (USA) Iron Circuit_007" src="https://github.com/user-attachments/assets/a10bcd41-bb2d-4a66-aba9-129f950a5871" />
 
 ## What it does
 
@@ -163,6 +165,16 @@ Only runs with 2 or fewer losses are saved. The W/L line renders only when the e
 - **Apply on top of**: original `Super Punch-Out!! (USA).sfc` ROM (MD5 `97fe7d7d2a1017f8480e60a365a373f0`).
 - **Conflicts with**: one address overlap at file `0x0452AB` (`$08:D2AB`) with `spo_super_macho_man_fix.ips` — iron's stub handles both Piston Hurricane and Super Macho Man portrait shifts, so both patches work regardless of apply order.
 - **Cheat-code compatibility**: all known Action Replay / Game Genie codes for the original ROM remain unaffected.
+
+## Building
+
+Built by [`scripts/build_spo_iron_circuit.py`](../../scripts/build_spo_iron_circuit.py):
+
+```
+python scripts/build_spo_iron_circuit.py <vanilla.sfc> [out.sfc]
+```
+
+The builder applies its annotated record set to a vanilla ROM, stamps the SNES header checksum, and writes `patches/standalone/spo_iron_circuit.ips`. Pass an optional output path to also emit the patched `.sfc`.
 
 ## See also
 

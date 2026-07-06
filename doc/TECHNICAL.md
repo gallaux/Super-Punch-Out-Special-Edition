@@ -4,9 +4,24 @@ This document covers the full reverse-engineering and implementation details beh
 
 **Reference:** all `CODE_*`, `DATA_*`, `UNK_*` labels and `%InsertGarbageData` regions referenced in this document follow the conventions of [**Yoshifanatic1's Super Punch-Out!! Disassembly**](https://github.com/Yoshifanatic1/Super-Punch-Out-Disassembly), which has been an invaluable reference throughout the development of this hack.
 
-The recommended distribution is the bundled [`spo_special_edition_v1.8.ips`](../patches/spo_special_edition_v1.8.ips), which stacks every patch in this repo and stamps a correct SNES header checksum for the combined ROM. The two headline features are [`spo_versus_hack.ips`](../patches/standalone/spo_versus_hack.ips) — VERSUS MODE, letting either controller pick on the opponent-select screen — and [`spo_iron_circuit.ips`](../patches/standalone/spo_iron_circuit.ips) — the IRON CIRCUIT fifth circuit. All other patches are independent quality-of-life improvements that can be applied in any combination: `spo_disable_security_checksum.ips`, `spo_alt_glove_colors.ips`, `spo_profile_stats_fix.ips`, `spo_super_macho_man_fix.ips`, `spo_how_to_typo_fix.ips`, `spo_title_screen_special_ring.ips`, `spo_title_screen_special_logo.ips`, `spo_jp_charset_enabled.ips`, and `spo_end_credits.ips`.
+The recommended distribution is the bundled [`spo_special_edition_v2.0.ips`](../patches/spo_special_edition_v2.0.ips), which stacks every patch in this repo and stamps a correct SNES header checksum for the combined ROM. The two headline gameplay features are [`spo_versus_hack.ips`](../patches/standalone/spo_versus_hack.ips) — VERSUS MODE, letting either controller pick on the opponent-select screen — and [`spo_iron_circuit.ips`](../patches/standalone/spo_iron_circuit.ips) — the IRON CIRCUIT fifth circuit.
 
-**Compatibility guarantee:** all 11 standalone patches in this repo are byte-disjoint with one another. They can be applied in any order on top of an original `Super Punch-Out!! (USA).sfc` ROM and the combined result is identical to the bundled `spo_special_edition_v1.8.ips`. The only intentional cross-patch overlap is at file `0x452AB` (`$08:D2AB`), where `spo_super_macho_man_fix.ips` and `spo_iron_circuit.ips` both hook the same per-fighter dispatch site; the bundle resolves this by applying `spo_iron_circuit.ips` last so the iron hook wins (the macho-man fix's hook is restored at runtime via a chained-stub pattern documented in `spo_super_macho_man_fix.ips`).
+Two further patches live in the ROM's expansion region: [`spo_alt_opponents_colors.ips`](../patches/standalone/spo_alt_opponents_colors.ips) — per-opponent alternate palettes — and [`spo_msu1_v6.ips`](../patches/standalone/spo_msu1_v6.ips) — MSU-1 CD-quality audio (Kurrono's patch). All other patches are independent quality-of-life improvements that can be applied in any combination: `spo_disable_security_checksum.ips`, `spo_alt_glove_colors.ips`, `spo_profile_stats_fix.ips`, `spo_super_macho_man_fix.ips`, `spo_how_to_typo_fix.ips`, `spo_title_screen_special_ring.ips`, `spo_title_screen_special_logo.ips`, `spo_jp_charset_enabled.ips`, and `spo_end_credits.ips`.
+
+**Compatibility guarantee:** the sub-2MB standalone patches in this repo are byte-disjoint with one another. Applied on top of an original `Super Punch-Out!! (USA).sfc` ROM, the combined result is identical to the bundled `spo_special_edition_v2.0.ips`. There are two intentional cross-patch overlaps, both resolved by apply order in the bundle builder ([`scripts/build_spo_se20_bundle.py`](../scripts/build_spo_se20_bundle.py)):
+
+- **File `0x452AB` (`$08:D2AB`)** — `spo_super_macho_man_fix.ips` and `spo_iron_circuit.ips` both hook this per-fighter dispatch site. The bundle applies iron last so its hook wins; the macho-man fix's hook is restored at runtime via a chained-stub pattern (documented under `spo_super_macho_man_fix.ips`).
+- **File `0x017E5` (`$00:97E5`)** — `spo_alt_opponents_colors.ips` re-hooks the fight-init palette load that `spo_alt_glove_colors.ips` also uses, chaining back to the glove trampoline so both run. Glove is applied first.
+
+The two expansion-region patches (`spo_alt_opponents_colors.ips` and `spo_msu1_v6.ips`) share the ExLoROM window at file `0x200000+` but their data ranges are disjoint (MSU-1 driver `0x200000–0x20007D`; alt-opp stubs and palettes `0x20047E–0x200B7F`). Because each standalone IPS blankets the whole expansion window with zeros around its own data, the bundle builder applies both "sparse" — writing only their non-zero expansion bytes — then expands to 2.5MB and stamps the ExLoROM checksum once.
+
+**Building the bundle:** [`scripts/build_spo_se20_bundle.py`](../scripts/build_spo_se20_bundle.py) reproduces `spo_special_edition_v2.0.ips` from a vanilla ROM:
+
+```
+python scripts/build_spo_se20_bundle.py <vanilla.sfc> [out.sfc]
+```
+
+It applies every standalone patch in the documented order, resolves the overlaps above, stamps the ExLoROM split+repeat checksum, and writes `patches/spo_special_edition_v2.0.ips`. The individual standalone patches are each reproduced by their own `scripts/build_spo_*.py` builder.
 
 ---
 
@@ -27,7 +42,9 @@ The recommended distribution is the bundled [`spo_special_edition_v1.8.ips`](../
 
 ## 1. ROM structure
 
-**Format:** LoROM (32 KB banks mapped at SNES $8000–$FFFF).
+**Format:** LoROM (32 KB banks mapped at SNES $8000–$FFFF). The vanilla ROM is 2 MB.
+
+**ExLoROM expansion (bundle):** `spo_alt_opponents_colors.ips` and `spo_msu1_v6.ips` expand the ROM to 2.5 MB and switch it to ExLoROM. This adds the SNES `$40:8000–$40:FFFF` bank (file `0x200000–0x207FFF`) and sets the makeup byte at file `0x7FD5` to `$32`. The header checksum then uses the ExLoROM split+repeat formula: the first 2 MB summed once plus the 0.5 MB expansion summed four times, `& 0xFFFF`. Patches that stay under 2 MB are unaffected and continue to compute the plain LoROM checksum on their own.
 
 **File offset formula:**
 ```
@@ -41,6 +58,7 @@ SNES $01:E16F → file 0x0E16F
 SNES $0D:A3DA → file 0x6A3DA
 SNES $0D:FA69 → file 0x6FA69
 SNES $02:8408 → file 0x10408
+SNES $40:847E → file 0x2047E  (ExLoROM expansion)
 ```
 
 **Direct Page register** is set to `$0C00` by `CODE_01B0F0` at title-screen entry and maintained throughout. All DP-relative references (e.g. `$10`, `$11`, `$23`) resolve to WRAM `$0C10`, `$0C11`, `$0C23`, etc.
@@ -696,7 +714,7 @@ Standalone doc links: [VERSUS_HACK](standalone/VERSUS_HACK.md) · [IRON_CIRCUIT]
 
 ### [`spo_alt_glove_colors.ips`](../patches/standalone/spo_alt_glove_colors.ips)
 
-**What it does:** Adds a runtime glove-color selector. Each opponent has a circuit-default color (Minor=vanilla green, Major=blue, World=red, Special=yellow, Iron=white, mirroring the per-circuit glove tones in Punch-Out!! Wii); the player can override via L (blue), R (red), X (yellow), Y (vanilla green), or SELECT (white) held during the pre-fight transition. The override applies only to the current match — the next fight reseeds. All player-glove animation states render in the chosen mode's hue: rest, the powered-up cycling animation, the knock-out-punch / rapid-punch frames, the portrait HUD (rest + both powered-up frames), the BG-tile renders for the victory pose / knockdown / get-up animations, and the player sprite on the ending credits screen.
+**What it does:** Adds a runtime glove-color selector. Each opponent has a circuit-default color (Minor=vanilla green, Major=blue, World=red, Special=yellow, Iron=white, mirroring the per-circuit glove tones in Punch-Out!! Wii); the player can override via L (blue), R (red), X (yellow), Y (vanilla green), or L+R (white) held during the pre-fight transition. The override applies only to the current match — the next fight reseeds. All player-glove animation states render in the chosen mode's hue: rest, the powered-up cycling animation, the knock-out-punch / rapid-punch frames, the portrait HUD (rest + both powered-up frames), the BG-tile renders for the victory pose / knockdown / get-up animations, and the player sprite on the ending credits screen.
 
 The full byte-level breakdown (hook sites, stub assembly, color tables) lives in the standalone doc [doc/standalone/ALT_GLOVE_COLORS.md](standalone/ALT_GLOVE_COLORS.md). This section covers the deeper technical context: *why* this is a runtime patch instead of a ROM-data patch, the glove animation state machine, and the cross-bank-RTS trap the portrait hooks had to navigate.
 
@@ -1189,13 +1207,58 @@ Uses `LDA.l` / `STA.l` (24-bit addressing) so DBR is irrelevant. The check fires
 
 **Why `$01:FEC2`:** the 206-byte block at `$01:FEC2–$01:FF8F` is labeled `UNK_01D722` in the disassembly (a copy of `$00:FEC2`, never executed at runtime — confirmed by ROM-wide JSR/JMP/BRA search). It is the largest free zone in bank `$01` and sits entirely before the interrupt-vector table at `$01:FF90`.
 
+### [`spo_score_overflow_fix.ips`](../patches/standalone/spo_score_overflow_fix.ips)
+
+**What it does:** Caps the running score at **999,990** so the 6-digit on-screen total can never overflow. Without it, a circuit total exceeding 999,990 silently wraps to a low number (e.g. 1,014,000 → 14,000) because the score-tally BCD adder drops the carry out of the top digit. Full write-up: [SCORE_OVERFLOW_FIX.md](standalone/SCORE_OVERFLOW_FIX.md).
+
+**The single BCD adder — `CODE_01AA55` (`$01:AA55`):** the ONLY multi-digit BCD add routine in the ROM. It adds a 6-digit source into a 6-digit destination one decimal digit per byte (score buffer `$0610`–`$0615`, `$0610` = ones) and silently drops the carry out of the 6th digit. Every score path — per-match bonus tally and the end-of-circuit high-score screen — funnels through it, so a single hook caps them all. 999,990 (not 999,999) is the cap because every point award is a multiple of 10, so the ones digit is structurally always 0.
+
+**Hook:** the adder's loop tail at `$01:AA7F` (file `0x0AA7F`) is `D0 DA 60` (`BNE $AA5B ; RTS`). Replace with `4C 55 FF` (`JMP $FF55`). The 39-byte stub at `$01:FF55` reproduces the loop-back, then on loop exit checks the carry-out of the last digit; if set (overflow), it clamps the six destination bytes to 999,990 (write `$09` to `dest+5..dest+1`, `$00` to `dest+0`). The destination base is recovered from `$00D2` (points to `dest_end` after the loop). Because the hook is at the shared adder, the score-tally tween also animates toward an already-capped buffer.
+
+**Free space:** 39 B at `$01:FF55–$01:FF7B`, inside `UNK_01D722` (see the bank-`$01` map). No other free space used; the hook is a 3-byte in-place edit.
+
+### [`spo_alt_opponents_colors.ips`](../patches/standalone/spo_alt_opponents_colors.ips)
+
+Gives every opponent an alternate palette — recolored body sprite, small portrait, and large pre-fight portrait — plus a unified circuit backdrop. The palettes turn on automatically during an IRON CIRCUIT run, or can be toggled per-fight with the SELECT button. This is the first patch in the repo to use the ExLoROM expansion bank.
+
+**ExLoROM layout (bank `$40`):** the patch expands the ROM to 2.5 MB (see §1) and places its palette tables and most of its stubs in the new `$40` bank:
+
+| SNES address | File offset | Contents |
+|---|---|---|
+| `$40:847E` | `0x2047E` | Hook 1 stub (fight-init body + small portrait) |
+| `$40:84FC` | `0x204FC` | Hook 6 stub (bytecode `$3C` Pal 2 restore) |
+| `$40:8580` | `0x20580` | Body palettes — 16 fighters × 32 B |
+| `$40:8780` | `0x20780` | Small-portrait palettes — 16 × 32 B |
+| `$40:8980` | `0x20980` | Large-portrait palettes — 16 × 32 B |
+| `$00:FE18` | `0x0FE18` | Hook 2 stub (large portrait) — bank `$00` free space |
+
+The MVN instructions in the stubs read palette data out of bank `$40` via the MVN source operand without changing the program bank, so the CPU never executes from `$40` (which is not reliably executable in this ExLoROM mapping).
+
+**Hooks (3 in-place redirects):**
+
+- **Hook 1 — `$00:97E5` (file `0x017E5`), fight init.** SE already has `JSL $0D:FDD2; NOP; NOP` here (the alt-glove hook). This patch changes it to `JSL $40:847E; NOP; NOP`; the stub does the body/small palette load, then chains to `$0D:FDD2` before returning so glove colors still apply. Gated on: iron flag `$7E:1D71`, OR P1 SELECT (`$7E:0091` bit 5), OR (VS mode `$7E:1D74 == 1` AND P2 SELECT `$7E:00A5` bit 5).
+- **Hook 6 — `$01:99D4` (file `0x099D4`).** The bytecode-interpreter opcode `$3C` handler (Pal 2 restore, fires on e.g. Masked Muscle's spit-end). Replaces `SEP #$20; LDA #$05` (`E2 20 A9 05`) with `JSL $40:84FC`; the stub redirects the palette source to the alt body palette when active, else runs vanilla.
+- **Hook 2 — `$00:9B91` (file `0x01B91`), large portrait.** Replaces only the `MVN $00,$10` (`54 00 10`, 3 B) with `JSR $FE18` (intra-bank, 3 B). The caller's `PLB`/`SEP #$20` at `$00:9B94` run unchanged after the stub returns.
+
+**WRAM flags:** reuses `$7E:1D71` (iron flag, owned by `spo_iron_circuit.ips`) and reserves `$7E:1D75` (alt-active fighter ID) and `$7E:1D76` (alt-active flag) for its own use.
+
+**Palette authoring:** the palettes are defined in [`scripts/build_spo_alt_opponents_colors.py`](../scripts/build_spo_alt_opponents_colors.py) as per-slot RGB overrides on the vanilla palettes; the swatch/hex reference tables in [`doc/standalone/ALT_OPPONENT_COLORS.md`](standalone/ALT_OPPONENT_COLORS.md) mirror those same values.
+
+### [`spo_msu1_v6.ips`](../patches/standalone/spo_msu1_v6.ips)
+
+Kurrono's MSU-1 audio patch (v6): replaces the SPC music with CD-quality streamed PCM on MSU-1-capable emulators and flash carts, falling back to the original SPC audio when no MSU-1 hardware/PCM files are present. See [`doc/standalone/KURRONO_MSU1.md`](standalone/KURRONO_MSU1.md) for the full track table, loop-flag fixes, and player setup.
+
+**Records (sub-2MB):** two code hooks at file `0x00EC6D` and `0x044C0C` route the music engine to the MSU-1 driver, plus the header-checksum update at `0x7FDC`.
+
+**ExLoROM driver:** the MSU-1 audio driver occupies file `0x200000–0x20007D` (121 bytes) in the `$40` expansion bank. This is disjoint from the alt-opponent-colors data at `0x20047E+`; see the compatibility note in the introduction for how the bundle builder merges the two.
+
 ### [`spo_disable_security_checksum.ips`](../patches/standalone/spo_disable_security_checksum.ips)
 
 The World Circuit completion checksum prevents the Special Circuit from unlocking when using save states, emulators (SNES Classic, Switch NSO), or patched ROMs. This patch disables that checksum check.
 
 **Patch record:** 1 in-place edit at file `0x003C23` (SNES `$00:BC23`): replaces `ORA $D5` (`05 D5`) with `LDA #$00` (`A9 00`), forcing the accumulator to zero before the SRAM-write store regardless of checksum result. Plus the standard 4-byte SNES header checksum update at file `0x7FDC`.
 
-This is the **sole** source of the Special Circuit lock bypass in `spo_special_edition_v1.8.ips`. The Versus Hack patch does not touch `$00:BC23` and does not include any security-checksum logic.
+This is the **sole** source of the Special Circuit lock bypass in `spo_special_edition_v2.0.ips`. The Versus Hack patch does not touch `$00:BC23` and does not include any security-checksum logic.
 
 ### [`spo_sound_mode_incomplete.ips`](../patches/incomplete/spo_sound_mode_incomplete.ips)
 
@@ -1209,7 +1272,7 @@ This is the **sole** source of the Special Circuit lock bypass in `spo_special_e
 
 **(3) Sound Library is outside the normal state machine.** `CODE_00913B` (the Sound Library) was designed to run from a cold boot state. It cannot be called safely from within the running game — the NMI handler conflicts with its PPU setup, and its exit path routes through the VS mode check rather than returning cleanly. See [doc/incomplete/AUDIO_MODE_INCOMPLETE.md](../incomplete/AUDIO_MODE_INCOMPLETE.md) for all approaches attempted.
 
-**This patch is a proof-of-concept only, is not included in `spo_special_edition_v1.8.ips`, and is not recommended for general use.**
+**This patch is a proof-of-concept only, is not included in `spo_special_edition_v2.0.ips`, and is not recommended for general use.**
 
 **Why JSL instead of JSR:** The original `JSR $CA71` (3 bytes) is replaced with `JSL $00:F61A` (4 bytes, relocated from original `$0D:FB2D`). Bank `$01` has zero confirmed-free bytes. The JSL's 4th byte overwrites `$B197` — the opcode of the following `LDX #$0002`. The stub compensates by ending with `LDX #$0003; RTL` so the caller's `STX.b $14` writes the new item count.
 
@@ -1289,7 +1352,8 @@ The disassembly labels `$00:F5D0–$00:FF8F` as `UNK_00F5D0` — a 2,496-byte `%
 | `0xFF30–0xFF3E` | 15 B | **`spo_iron_circuit.ips`** — SLOT_KILL stub (clear iron W/L on per-profile FILE KILL) |
 | `0xFF3F–0xFF4A` | 12 B | **Free** |
 | `0xFF4B–0xFF54` | 10 B | **`spo_iron_circuit.ips`** — startup init stub |
-| `0xFF55–0xFF8F` | ~59 B | **Free** (end of `UNK_01D722`) |
+| `0xFF55–0xFF7B` | 39 B | **`spo_score_overflow_fix.ips`** — score overflow-detect + clamp-to-999,990 stub |
+| `0xFF7C–0xFF8F` | ~20 B | **Free** (end of `UNK_01D722`) |
 | `0xFFB0–0xFFE0` | 49 B | 5-item Mode Select dispatch stub + TA/RV trampolines + VERSUS handler + trampoline 2 (extends 1 byte into the previously-free `$01:FFE0` slot) |
 | `0xFFE1–0xFFE3` | 3 B | **Free** |
 
@@ -1326,8 +1390,9 @@ The disassembly at line 78995 explicitly labels `$0DFA69–$0DFFE3` as garbage f
 | `0x6FDAA–0x6FDED` | 68 B | `spo_alt_glove_colors.ips` glove-mode dispatch / palette stubs (part 1) |
 | `0x6FDEE` | 1 B | **Free** |
 | `0x6FDEF–0x6FE51` | 99 B | `spo_alt_glove_colors.ips` Hook 1 fight-init trampoline + powered-up dispatch |
-| `0x6FE52–0x6FE67` | 22 B | `spo_alt_glove_colors.ips` SELECT + iron-flag helper stub |
-| `0x6FE68–0x6FE7F` | 24 B | **Free** |
+| `0x6FE52–0x6FE69` | 24 B | `spo_alt_glove_colors.ips` L+R + iron-flag helper stub |
+| `0x6FE6A–0x6FE7B` | 18 B | `spo_alt_glove_colors.ips` R-vs-X sub |
+| `0x6FE7C–0x6FE7F` | 4 B | **Free** |
 | `0x6FE80–0x6FEBB` | 60 B | `spo_alt_glove_colors.ips` powered-up palette stub |
 | `0x6FEBC–0x6FEBF` | 4 B | **Free** |
 | `0x6FEC0–0x6FEFF` | 64 B | `spo_alt_glove_colors.ips` knock-out-punch stub |
@@ -1340,22 +1405,41 @@ The disassembly at line 78995 explicitly labels `$0DFA69–$0DFFE3` as garbage f
 | `0x6FFCF–0x6FFE3` | 21 B | **Free** |
 | `0x6FFE4–0x6FFFF` | 28 B | Interrupt vectors — **untouchable** |
 
-**Free space totals after Special Edition v1.8:**
+**Free space totals in the base 2 MB (with the full Special Edition bundle applied):**
 
 | Region | Free |
 |---|---|
 | Bank `$0D` (`$0DFA69–$0DFFE3` zone) | **~213 B** (fragmented; max contiguous run 68 B at `$0D:FD25–$0D:FD68`) |
 | Bank `$01` `UNK_01F784` (end at `$01:F800`) | **1 B** |
-| Bank `$01` `UNK_01D722` (`$01:FF12–$FF1F`, `$01:FF3F–$FF4A`, and `$01:FF55–$FF8F`) | **~85 B** |
+| Bank `$01` `UNK_01D722` (`$01:FF12–$FF1F`, `$01:FF3F–$FF4A`, and `$01:FF7C–$FF8F`) | **~46 B** |
 | Bank `$01` `$01:801C–$01:8029` (header thunk zone tail) | **14 B** |
 | Bank `$01` `$01:846A` (back-out clear zone tail) | **1 B** |
 | Bank `$01` `$01:FFE1–$FFE3` | **3 B** |
-| Bank `$00` `UNK_00F5D0` (`$00:FE18–$00:FF8F`) | **~376 B** (contiguous) |
-| **Total** | **~693 B** |
+| Bank `$00` `UNK_00F5D0` (`$00:FF90` end; `$00:FE18` now holds the alt-opp Hook 2 stub) | **~200 B** |
+| **Total** | **~478 B** |
+
+The 2.5 MB ExLoROM expansion adds ~510 KB of additional free space in bank `$40` (mapped below).
 
 `spo_super_macho_man_fix.ips` also consumes 19 bytes in bank `$08` at file `0x045926` (`$08:D926`) for the new fighter-banner entry. That region sits inside the disassembly's documented `%InsertGarbageData($08D926, ...)` zone — dead code from development, never referenced at runtime. `spo_iron_circuit.ips` adds **no stub bytes** to bank `$08` (only single-instruction in-place hooks); iron-staged data lives in low WRAM and is read via the bank-`$08` low-WRAM mirror.
 
-**WRAM and SRAM allocations** (Special Edition v1.8):
+### Bank `$40` — ExLoROM expansion (file `0x200000–0x207FFF`)
+
+The Special Edition bundle expands the ROM to 2.5 MB, adding the `$40` bank. Only the first ~2.9 KB is used; the rest is zero-fill.
+
+| Range | Size | Contents |
+|---|---|---|
+| `0x200000–0x20007D` | 121 B | `spo_msu1_v6.ips` MSU-1 audio driver |
+| `0x20007E–0x20047D` | ~1 KB | **Free** (gap between MSU-1 driver and alt-opp stubs) |
+| `0x20047E–0x2004FB` | ~126 B | `spo_alt_opponents_colors.ips` Hook 1 stub (`$40:847E`) |
+| `0x2004FC–0x20057F` | ~132 B | `spo_alt_opponents_colors.ips` Hook 6 stub (`$40:84FC`) |
+| `0x200580–0x20077F` | 512 B | Body palettes (`$40:8580`, 16 × 32 B) |
+| `0x200780–0x20097F` | 512 B | Small-portrait palettes (`$40:8780`, 16 × 32 B) |
+| `0x200980–0x200B7F` | 512 B | Large-portrait palettes (`$40:8980`, 16 × 32 B) |
+| `0x200B80–0x27FFFF` | ~510 KB | **Free** |
+
+The two expansion patches are byte-disjoint in this bank; the bundle builder merges them (see the introduction's compatibility note).
+
+**WRAM and SRAM allocations** (full Special Edition bundle):
 
 | Region | Bytes | Owner |
 |---|---|---|
@@ -1363,6 +1447,8 @@ The disassembly at line 78995 explicitly labels `$0DFA69–$0DFFE3` as garbage f
 | `$7E:1D71` | 1 | `spo_iron_circuit.ips` iron flag |
 | `$7E:1D72`/`$1D73` | 2 | `spo_iron_circuit.ips` iron belt-screen flag (M=16 read alignment) |
 | `$7E:1D74` | 1 | `spo_versus_hack.ips` VERSUS session flag |
+| `$7E:1D75` | 1 | `spo_alt_opponents_colors.ips` alt-active fighter ID |
+| `$7E:1D76` | 1 | `spo_alt_opponents_colors.ips` alt-active flag |
 | `$7E:1FE5–$1FE9` | 5 | `spo_iron_circuit.ips` runtime-staged "IRON" letter-byte string |
 | `$7E:1FEA` | 1 | `spo_iron_circuit.ips` cumulative KD count |
 | `$7E:1FEB` | 1 | `spo_iron_circuit.ips` HP stash sentinel |
@@ -1559,7 +1645,8 @@ The opponent-select call site at `CODE_01BD0D` (file `0x0BD0D`) uses `TYA` to de
 | `$00:FD50` | `0x07D50` | Powered-up color table — 5 modes × 8 B (`spo_alt_glove_colors.ips`; mode 0 = vanilla) |
 | `$00:FD78` | `0x07D78` | Knock-out-punch color table — 5 modes × 8 B (`spo_alt_glove_colors.ips`; mode 0 = vanilla) |
 | `$00:FDA0` | `0x07DA0` | Portrait color table — 3 frames × 4 modes × 4 B (`spo_alt_glove_colors.ips`) |
-| `$0D:FE52` | `0x06FE52` | SELECT + iron-flag helper stub (`spo_alt_glove_colors.ips`) |
+| `$0D:FE52` | `0x06FE52` | L+R + iron-flag helper stub (`spo_alt_glove_colors.ips`) |
+| `$0D:FE6A` | `0x06FE6A` | R-vs-X sub (`spo_alt_glove_colors.ips`) |
 | `$00:8547` | `0x00547` | `DATA_008547` (ColorEndScreen.bin) — 288-byte ending palette block; palette 4 c12-c15 at `0x05DF` patched by `spo_alt_glove_colors.ips` |
 | `$0D:FFE4` | `0x6FFE4` | Interrupt vectors — untouchable |
 | `$08:BB3D` | `0x43B3D` | Per-fighter banner pointer table (16 entries × 2 bytes) |

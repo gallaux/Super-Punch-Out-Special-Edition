@@ -56,3 +56,8 @@ org $08B876
 - **Apply on top of**: original `Super Punch-Out!! (USA).sfc` ROM (MD5 `97fe7d7d2a1017f8480e60a365a373f0`)
 - **Conflicts with**: nothing in this repo
 - **Cheat-code compatibility**: unaffected
+- **Bundled into**: `spo_special_edition_v2.0.ips`
+
+## See also
+
+- [`PROFILE_STATS_FIX.md`](PROFILE_STATS_FIX.md) — another small text/data correction bundled into Special Edition.

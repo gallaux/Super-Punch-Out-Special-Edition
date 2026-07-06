@@ -243,23 +243,31 @@ RTL
 
 ---
 
-## Compatibility with Special Edition v1.8
+## Compatibility with Special Edition
 
-`spo_msu1_v6.ips` is **byte-disjoint** with every patch in this repository.
-Zero conflicts with all SE standalone
-patches and with `spo_special_edition_v1.8.ips` (excluding the SNES header
-checksum at `0x7FDC`, which every standalone patch updates independently).
+`spo_msu1_v6.ips` is bundled into `spo_special_edition_v2.0.ips`. Its
+sub-2MB hooks (`0x00EC6D` and `0x044C0C`) are byte-disjoint from every
+other SE patch. Its audio driver stub lives in the ExLoROM expansion
+region at `0x200000..0x20007D`.
 
-The MSU-1 hooks are at `0x00EC6D` and `0x044C0C` — neither touched by any SE
-patch. The stub at `0x200000` is beyond the ROM's 2MB content range and
-unreachable by any SE patch.
+One patch shares that expansion region: `spo_alt_opponents_colors.ips`,
+whose stubs and palette tables occupy `0x20047E..0x200B7F`. The two
+data ranges do not overlap, but each patch's standalone IPS blankets the
+whole `0x200000..0x27FFFF` window with zeros around its own data, so
+applying one naively on top of the other would zero-wipe it. The
+bundle builder resolves this by writing only each patch's non-zero
+expansion bytes, then expanding and zero-filling the window once.
 
-**Recommended apply order:**
+**Standalone apply order (MSU-1 only, no alt-opponent colors):**
 ```
-vanilla → spo_special_edition_v1.8.ips → spo_msu1_v6.ips
+vanilla → spo_msu1_v6.ips
 ```
-Applied last, the MSU-1 patch stamps the final checksum. The result is a
-valid, checksum-correct ROM.
+Applied to a plain vanilla ROM, the MSU-1 patch stamps a valid checksum
+on its own.
+
+To combine MSU-1 with the full Special Edition, build the bundle with
+`scripts/build_spo_se20_bundle.py`, which applies every patch in the correct
+order and stamps the ExLoROM split+repeat checksum for the 2.5MB ROM.
 
 ---
 
@@ -278,11 +286,9 @@ valid, checksum-correct ROM.
 
 Apply `spo_msu1_v6.ips` to the vanilla non-headered US ROM.
 
-If stacking with Special Edition, apply in this order:
-
-```
-vanilla → spo_special_edition_v1.8.ips → spo_msu1_v6.ips
-```
+To combine with Special Edition, don't stack the IPS files by hand — build
+the bundle with `scripts/build_spo_se20_bundle.py`, which merges MSU-1 with the
+other patches and stamps the correct 2.5MB ExLoROM checksum.
 
 ### Step 2 — Name the ROM
 
@@ -319,7 +325,21 @@ copy an empty `spo_msu1.msu` and all PCM files into that folder.
 - **Conflicts with**: nothing in this repo
 - **Cheat-code compatibility**: unaffected
 
+## Building
+
+Built by [`scripts/build_spo_msu1_v6.py`](../../scripts/build_spo_msu1_v6.py):
+
+```
+python scripts/build_spo_msu1_v6.py <vanilla.sfc> [out.sfc]
+```
+
+The builder assembles the corrected v6 stub (loop-flag fix + `spcFallback` offset fix), applies it and the two hooks to a vanilla ROM, stamps the SNES header checksum, and writes `patches/standalone/spo_msu1_v6.ips`. Pass an optional output path to also emit the patched `.sfc`. It does **not** include or require the PCM audio files.
+
 ## Credits
 
 - **Original patch author:** Kurrono
 - **Source thread:** [zeldix.net/t1951-super-punch-out](https://www.zeldix.net/t1951-super-punch-out)
+
+## See also
+
+- [`ALT_OPPONENT_COLORS.md`](ALT_OPPONENT_COLORS.md) — the other patch that lives in the ExLoROM expansion region; the two share the `0x200000+` window with disjoint data.

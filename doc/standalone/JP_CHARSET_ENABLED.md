@@ -46,7 +46,7 @@ org $01DF95
 ## Compatibility
 
 - **Apply on top of**: original `Super Punch-Out!! (USA).sfc` ROM (MD5 `97fe7d7d2a1017f8480e60a365a373f0`)
-- **Bundled into**: `spo_special_edition_v1.8.ips`
+- **Bundled into**: `spo_special_edition_v2.0.ips`
 - **Conflicts with**: nothing in this repo
 - **Cheat-code compatibility**: unaffected
 
